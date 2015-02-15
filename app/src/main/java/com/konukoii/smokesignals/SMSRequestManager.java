@@ -4,12 +4,16 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.provider.CallLog;
 import android.telephony.gsm.SmsMessage;
 import android.util.Log;
 import android.widget.Toast;
 import android.telephony.SmsManager;
 import java.util.ArrayList;
+import java.util.Date;
 import android.content.IntentFilter;
+import android.provider.CallLog;
+import android.database.Cursor;
 
 /**
  * Created by TransAtlantic on 2/14/2015.
@@ -69,15 +73,12 @@ public class SMSRequestManager {
                 //Toast.makeText(context, msg_body, Toast.LENGTH_LONG).show();
 
                 int i = parseSMS(msg_body);
-                if (i==HELP){
-
-                    sendSMS(msg_from, HELP_TXT);
-                }
+                if (i==HELP){QueryHelp();}
                 else if (i==BATTERYLIFE){
                     Toast.makeText(context, "Battery?", Toast.LENGTH_LONG).show();
                     QueryBattery();
                 }
-                //else if
+                else if (i==MISSEDCALLS){ QueryMissedCalls();}
 
                 //Toast.makeText(context, "text"+i, Toast.LENGTH_LONG).show();
                 //Toast.makeText(context, "sh",Toast.LENGTH_LONG).show();
@@ -114,8 +115,7 @@ public class SMSRequestManager {
 
 
     //Respond_to_SMS
-    private void sendSMS(String phoneNumber, String message)
-    {
+    private void sendSMS(String phoneNumber, String message){
 
         SmsManager sms = SmsManager.getDefault();
         ArrayList<String> parts = sms.divideMessage(message);
@@ -124,12 +124,58 @@ public class SMSRequestManager {
         Log.d(TAG,"message sent!");
     }
 
-
+    //Query Functions//////////////////////////////////////////////////////////////////////////////
+    private void QueryHelp(){
+        sendSMS(msg_from, HELP_TXT);
+    }
     private void QueryBattery(){
         context.registerReceiver(this.mBatInfoReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
     }
+    private void QueryMissedCalls(){
+
+        //Get all the Call Log
+        String[] projection = { CallLog.Calls.CACHED_NAME, CallLog.Calls.CACHED_NUMBER_LABEL, CallLog.Calls.TYPE };
+
+        //Query to find which calls in the Call Log are MISSED and NEW (Haven't been akwnoledged by user)
+        String where = CallLog.Calls.TYPE+"="+CallLog.Calls.MISSED_TYPE+" AND NEW = 1";
+        Cursor c = context.getContentResolver().query(CallLog.Calls.CONTENT_URI,null,where, null, null);
+
+        //Check if there's no missed calls...or negative missed calls? :S
+        if (c.getCount() <=0){
+            sendSMS(msg_from,"No missed calls...no she didn't call back...yes its because she found you weird..."); //lulz remember to change this
+        }
+
+        //Make a nice list of missed calls (Hopefully you don't have 42 missed phone calls from you girlfriend in the last hour)
+        c.moveToFirst();
+
+
+
+        String output="MISSED CALLS:";
+        int number = c.getColumnIndex(CallLog.Calls.NUMBER);
+        int name = c.getColumnIndex(CallLog.Calls.CACHED_NAME);
+        int date = c.getColumnIndex(CallLog.Calls.DATE);
+
+        do{
+
+            String phNumber = c.getString(number);
+            String callDate = c.getString(date);
+            String callerName = c.getString(name);
+            Date callDayTime = new Date(Long.valueOf(callDate));
+
+            output+="\nName: "+callerName+"\nPhone Number: " + phNumber +"\nCall Date: " + callDayTime;
+            output+="\n-------";
+
+        }while(c.moveToNext());
+
+        sendSMS(msg_from,output);
+
+        Log.d(TAG, output); //do some other operation
+
+    }
+
 
     //Broadcast Receivers Inner Classes////////////////////////////////////////////////////////////
+    ///Gotta do it this way since BroadCast Receivers take a while to anwser back these queries///
     private BroadcastReceiver mBatInfoReceiver = new BroadcastReceiver(){
         @Override
         public void onReceive(Context arg0, Intent intent) {
