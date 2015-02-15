@@ -12,7 +12,9 @@ import android.widget.Toast;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.IntentFilter;
-
+import android.telephony.gsm.SmsMessage;
+import android.os.Bundle;
+import android.provider.Telephony.Sms;
 
 public class MainService extends Service{
 
@@ -25,12 +27,11 @@ public class MainService extends Service{
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
+            SMSRequestManager smsRequestManager = new SMSRequestManager();
             if(action.equals("android.provider.Telephony.SMS_RECEIVED")){
-                Toast.makeText(context, "Pana te llego un mensaje!", Toast.LENGTH_LONG).show();
-                Log.d(TAG, "El Mensaje esta aca!");
-            }
-            else if(action.equals(android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED)){
-                //action for phone state changed
+                //Toast.makeText(context, "Pana te llego un mensaje!", Toast.LENGTH_LONG).show();
+                Log.d(TAG, "New SMS Arrived");
+                smsRequestManager.go(context, intent);
             }
         }
     };
@@ -51,7 +52,6 @@ public class MainService extends Service{
         //Initialize the SMS: Broadcast_Receiver
         IntentFilter filter = new IntentFilter();
         filter.addAction("android.provider.Telephony.SMS_RECEIVED");
-        filter.addAction(android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED);
         registerReceiver(receiver, filter);
     }
 
