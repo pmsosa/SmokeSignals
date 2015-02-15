@@ -18,6 +18,7 @@ public class MainService extends Service{
     //Debuggin' Purpouses
     private final static String TAG="SmokeSignals";
 
+    /*
     //Broadcast Reciever
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override
@@ -31,6 +32,7 @@ public class MainService extends Service{
             }
         }
     };
+    */
 
 
     @Override
