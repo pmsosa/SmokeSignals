@@ -11,6 +11,7 @@ import android.util.Log;
 import android.widget.Toast;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.IntentFilter;
 
 
 public class MainService extends Service{
@@ -18,7 +19,7 @@ public class MainService extends Service{
     //Debuggin' Purpouses
     private final static String TAG="SmokeSignals";
 
-    /*
+
     //Broadcast Reciever
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override
@@ -26,13 +27,15 @@ public class MainService extends Service{
             String action = intent.getAction();
             if(action.equals("android.provider.Telephony.SMS_RECEIVED")){
                 Toast.makeText(context, "Pana te llego un mensaje!", Toast.LENGTH_LONG).show();
+                Log.d(TAG, "El Mensaje esta aca!");
             }
             else if(action.equals(android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED)){
                 //action for phone state changed
             }
         }
     };
-    */
+
+
 
 
     @Override
@@ -44,6 +47,12 @@ public class MainService extends Service{
     public void onCreate() {
         Toast.makeText(this, "Congrats! MyService Created", Toast.LENGTH_LONG).show();
         Log.d(TAG, "onCreate");
+
+        //Initialize the SMS: Broadcast_Receiver
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("android.provider.Telephony.SMS_RECEIVED");
+        filter.addAction(android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED);
+        registerReceiver(receiver, filter);
     }
 
     @Override
@@ -55,7 +64,12 @@ public class MainService extends Service{
     @Override
     public void onDestroy() {
         Toast.makeText(this, "MyService Stopped", Toast.LENGTH_LONG).show();
+
+        //Destroy the SMS_Broadcast_Receiver
+        unregisterReceiver(receiver);
+
         Log.d(TAG, "onDestroy");
+
     }
 
 }
