@@ -200,6 +200,11 @@ public class SMSRequestManager {
     // --> FIND CONTACTS WITH ONLY PARTIAL INFO
     private void QueryContact(String query){
 
+        //DO NOT DELETE THIS. Believe me, I have seen what happens when you indiscriminatly query for 'a' and suddenly your phone is dumping all your contacts!
+        if (query.length()<=3){
+            sendSMS(msg_from,"Query is too short. Please provide a contact query at least of at 4 characters");
+            return;
+        }
          /*
         query = "%"+query+"%"; //Super important for the SQL LIKE command (LIKE %ed% returns true to EDuardo, pEDro, etc. (also LIKE is not case sensitive!)
         String id_name=null;
@@ -216,67 +221,63 @@ public class SMSRequestManager {
         nameCur.close();
         */
 
-        //Find the ID
+        //First get the List of All possible Contacts with their IDs
         query = "%"+query+"%"; //Super important for the SQL LIKE command (LIKE %ed% returns true to EDuardo, pEDro, etc. (also LIKE is not case sensitive!)
         String id_name=null;
         Uri resultUri = ContactsContract.Contacts.CONTENT_URI;
         Cursor cont = context.getContentResolver().query(resultUri, null, null, null, null);
         String whereName = ContactsContract.Data.MIMETYPE + " = ? AND " + ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME + " LIKE ?" ;
         String[] whereNameParams = new String[] { ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,query};
-        Cursor nameCur = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams, ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
 
+        Cursor nameCur = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams, StructuredName.CONTACT_ID);
+
+        String output = "Possible Matches:\n";
+
+        //Loop throught the IDs
         while (nameCur.moveToNext()) {
-            id_name = nameCur.getString(nameCur.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.CONTACT_ID));}
-        nameCur.close();
-        cont.close();
-        nameCur.close();
 
-        String id = id_name;
+            String name="";
+            String phone="";
+            String email="";
+            String id="";
 
+            //USE THE IDs you got to find the rest of the information
+            id = nameCur.getString(nameCur.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.CONTACT_ID));
 
-        //Find the REST;
-        String name=null;
-        String phone=null;
-        String email=null;
-        resultUri = ContactsContract.Contacts.CONTENT_URI;
-        cont = context.getContentResolver().query(resultUri, null, null, null, null);
-        whereName = ContactsContract.Data.MIMETYPE + " = ? AND " + ContactsContract.CommonDataKinds.StructuredName.CONTACT_ID+ " = ?" ;
+            //FIND NAME;
+            name = nameCur.getString(nameCur.getColumnIndex(StructuredName.DISPLAY_NAME));
 
-        String[] whereNameParams1 = new String[] { ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,id};
-        Cursor nameCur1 = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams1, ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
-        while (nameCur1.moveToNext()) {
-            name = nameCur1.getString(nameCur1.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME));}
-        nameCur1.close();
-        cont.close();
-        nameCur1.close();
+            //FIND NUMBER
+            whereName = ContactsContract.Data.MIMETYPE + " = ? AND " + ContactsContract.CommonDataKinds.StructuredName.CONTACT_ID + " = ?";
+            String[] whereNameParams2 = new String[]{ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE, id};
+            Cursor nameCur2 = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams2, ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
+            while (nameCur2.moveToNext()) {
+                phone = nameCur2.getString(nameCur2.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+            }
+            nameCur2.close();
 
-
-        String[] whereNameParams2 = new String[] { ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE,id};
-        Cursor nameCur2 = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams2, ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
-        while (nameCur2.moveToNext()) {
-            phone = nameCur2.getString(nameCur2.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));}
-        nameCur2.close();
-        cont.close();
-        nameCur2.close();
+            //FIND EMAIL
+            String[] whereNameParams3 = new String[]{ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE, id};
+            Cursor nameCur3 = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams3, ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
+            while (nameCur3.moveToNext()) {
+                email = nameCur3.getString(nameCur3.getColumnIndex(ContactsContract.CommonDataKinds.Email.DATA));
+            }
+            nameCur3.close();
 
 
-        String[] whereNameParams3 = new String[] { ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE,id};
-        Cursor nameCur3 = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams3, ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
-        while (nameCur3.moveToNext()) {
-            email = nameCur3.getString(nameCur3.getColumnIndex(ContactsContract.CommonDataKinds.Email.DATA));}
-        nameCur3.close();
-        cont.close();
-        nameCur3.close();
 
-        String[] whereNameParams4 = new String[] { ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE,id};
-        Cursor nameCur4 = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams4, ContactsContract.CommonDataKinds.StructuredPostal.DATA);
-        while (nameCur4.moveToNext()) {
-            phone = nameCur4.getString(nameCur4.getColumnIndex(ContactsContract.CommonDataKinds.StructuredPostal.DATA));}
-        nameCur4.close();
-        cont.close();
-        nameCur4.close();
-        //showing result
-        sendSMS(msg_from, "Name= " + name + "\nPhone= " + phone + "\nEmail= " + email);
+
+            if (phone != "") {
+                output += "\nName: " + name;
+                output += "\nPhone: " + phone;
+                if (email != "") {
+                    output += "\nEmail: " + email;
+                }
+                output += "\n-----";
+            }
+        }
+
+        sendSMS(msg_from, output);
 
     }
 
