@@ -3,6 +3,7 @@ package com.konukoii.smokesignals;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.location.LocationListener;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.CallLog;
@@ -21,6 +22,10 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.PhoneLookup;
 import android.content.ContentResolver;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import java.util.Calendar;
 
 /**
  * Created by TransAtlantic on 2/14/2015.
@@ -79,19 +84,8 @@ public class SMSRequestManager {
                 //Toast.makeText(context, msg_from, Toast.LENGTH_LONG).show();
                 //Toast.makeText(context, msg_body, Toast.LENGTH_LONG).show();
 
-                int i = parseSMS(msg_body);
-                if (i==HELP){
-                    Toast.makeText(context, "Help?", Toast.LENGTH_LONG).show();
-                    QueryHelp();
-                }
-                else if (i==BATTERYLIFE){
-                    Toast.makeText(context, "Battery?", Toast.LENGTH_LONG).show();
-                    QueryBattery();
-                }
-                else if (i==MISSEDCALLS){
-                    Toast.makeText(context, "Calls?", Toast.LENGTH_LONG).show();
-                    QueryMissedCalls();
-                }
+                parseSMS(msg_body);
+
 
                 //Toast.makeText(context, "text"+i, Toast.LENGTH_LONG).show();
                 //Toast.makeText(context, "sh",Toast.LENGTH_LONG).show();
@@ -105,23 +99,32 @@ public class SMSRequestManager {
     //ParseCmd
     private int parseSMS(String msg_body){
         if (msg_body.equals("//Location")){
+            Toast.makeText(context, "Location?", Toast.LENGTH_LONG).show();
+            QueryLocation();
             return LOCATION;
         }
         else if (msg_body.equals("//Ring")){
+            Toast.makeText(context, "Ring?", Toast.LENGTH_LONG).show();
             return RING;
         }
         else if (msg_body.equals("//Battery")){
+            Toast.makeText(context, "Battery?", Toast.LENGTH_LONG).show();
+            QueryBattery();
             return BATTERYLIFE;
         }
         else if (msg_body.equals("//Calls")){
+            Toast.makeText(context, "Calls?", Toast.LENGTH_LONG).show();
+            QueryMissedCalls();
             return MISSEDCALLS;
         }
         else if (msg_body.equals("//Help")){
+            Toast.makeText(context, "Help?", Toast.LENGTH_LONG).show();
+            QueryHelp();
             return HELP;
         }
-        else if (msg_body.substring(0,9).equals("//Contact")){ //else if (msg_body.substring(0,9).equals("//Contact")){
+        else if (msg_body.substring(0,9).equals("//Contact")){
+            Toast.makeText(context, "Contact?", Toast.LENGTH_LONG).show();
             QueryContact(msg_body.substring(10));
-            //sendSMS(msg_from,msg_body.substring(10));
             return CONTACTSEARCH;
         }
 
@@ -146,8 +149,62 @@ public class SMSRequestManager {
     }
 
     private void QueryBattery(){
-        context.registerReceiver(this.mBatInfoReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        context.registerReceiver(this.BatteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
     }
+
+    private void QueryLocation(){
+        GPSLocation gpsloc = new GPSLocation();
+        gpsloc.go();
+    }
+
+    ///////GPS LOCATION LISTENER
+    public class GPSLocation implements LocationListener{
+        LocationManager mLocationManager;
+
+        public void go(){
+            mLocationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
+            Location location = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+
+            //Get Last Known location (2 minutes old max) [Lowers battery consumption]
+            if(location != null && location.getTime() > Calendar.getInstance().getTimeInMillis() - 2 * 60 * 1000) {
+                Log.d(TAG, location.getLatitude() + " and " + location.getLongitude());
+                String output = "Location:\n"+"Lat: "+location.getLatitude() + " Long: "+
+                                location.getLongitude()+"\nGmaps: "+" http://google.com/maps/?q="+location.getLatitude()+","+location.getLongitude();
+
+                sendSMS(msg_from,output);
+                mLocationManager.removeUpdates(this); //Super Important to RemoveUpdates (only want to query once)
+            }
+            else {
+                if (mLocationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)==true) {
+                    mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
+                }else{
+                    sendSMS(msg_from,"GPS is Turned Off! Can't Report Location :'(");
+                }
+            }
+        }
+
+        @Override
+        public void onLocationChanged(Location location){
+            if (location !=null){
+                Log.d(TAG, location.getLatitude() + " and " + location.getLongitude());
+                String output = "Location:\n"+"Lat: "+location.getLatitude() + " Long: "+
+                        location.getLongitude()+"\nGmaps: "+" http://google.com/maps/?q="+location.getLatitude()+","+location.getLongitude();
+
+                sendSMS(msg_from,output);
+                mLocationManager.removeUpdates(this); //Super Important to RemoveUpdates (only want to query once)
+            }
+        }
+        // Required functions
+        @Override
+        public void onProviderDisabled(String arg0) {;}
+        @Override
+        public void onProviderEnabled(String arg0) {;}
+        @Override
+        public void onStatusChanged(String arg0, int arg1, Bundle arg2) {;}
+    }
+
+
+    //////
 
     private void QueryMissedCalls(){
 
@@ -288,10 +345,10 @@ public class SMSRequestManager {
 
     }
 
-    //Broadcast Receivers Inner Classes////////////////////////////////////////////////////////////
+//////Broadcast Receivers Inner Classes////////////////////////////////////////////////////////////
     ///Gotta do it this way since BroadCast Receivers take a while to anwser back these queries///
     ///Gotta be inner classes so they can unregister themselves///////////////////////////////////
-    private BroadcastReceiver mBatInfoReceiver = new BroadcastReceiver(){
+    private BroadcastReceiver BatteryReceiver = new BroadcastReceiver(){
         @Override
         public void onReceive(Context arg0, Intent intent) {
             int level = intent.getIntExtra("level", 0);
@@ -300,7 +357,7 @@ public class SMSRequestManager {
             context.unregisterReceiver(this);
         }
     };
-
+///////////////////////////-------------------
 
 
     //Blacklist or Whitelist Phones
