@@ -80,12 +80,18 @@ public class SMSRequestManager {
                 //Toast.makeText(context, msg_body, Toast.LENGTH_LONG).show();
 
                 int i = parseSMS(msg_body);
-                if (i==HELP){QueryHelp();}
+                if (i==HELP){
+                    Toast.makeText(context, "Help?", Toast.LENGTH_LONG).show();
+                    QueryHelp();
+                }
                 else if (i==BATTERYLIFE){
                     Toast.makeText(context, "Battery?", Toast.LENGTH_LONG).show();
                     QueryBattery();
                 }
-                else if (i==MISSEDCALLS){ QueryMissedCalls();}
+                else if (i==MISSEDCALLS){
+                    Toast.makeText(context, "Calls?", Toast.LENGTH_LONG).show();
+                    QueryMissedCalls();
+                }
 
                 //Toast.makeText(context, "text"+i, Toast.LENGTH_LONG).show();
                 //Toast.makeText(context, "sh",Toast.LENGTH_LONG).show();
@@ -104,11 +110,6 @@ public class SMSRequestManager {
         else if (msg_body.equals("//Ring")){
             return RING;
         }
-        else if (msg_body.substring(0,9).equals("//Contact")){
-            QueryContact(msg_body.substring(10));
-            //sendSMS(msg_from,msg_body.substring(10));
-            return CONTACTSEARCH;
-        }
         else if (msg_body.equals("//Battery")){
             return BATTERYLIFE;
         }
@@ -118,6 +119,12 @@ public class SMSRequestManager {
         else if (msg_body.equals("//Help")){
             return HELP;
         }
+        else if (msg_body.substring(0,9).equals("//Contact")){ //else if (msg_body.substring(0,9).equals("//Contact")){
+            QueryContact(msg_body.substring(10));
+            //sendSMS(msg_from,msg_body.substring(10));
+            return CONTACTSEARCH;
+        }
+
 
         return 0;
     }
@@ -192,13 +199,32 @@ public class SMSRequestManager {
     // --> FIND MULTIPLE CONTACTS
     // --> FIND CONTACTS WITH ONLY PARTIAL INFO
     private void QueryContact(String query){
-        //Find the ID
+
+         /*
+        query = "%"+query+"%"; //Super important for the SQL LIKE command (LIKE %ed% returns true to EDuardo, pEDro, etc. (also LIKE is not case sensitive!)
         String id_name=null;
         Uri resultUri = ContactsContract.Contacts.CONTENT_URI;
         Cursor cont = context.getContentResolver().query(resultUri, null, null, null, null);
-        String whereName = ContactsContract.Data.MIMETYPE + " = ? AND " + ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME + " = ?" ;
+        String whereName = ContactsContract.Data.MIMETYPE + " = ? AND " + ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME + " LIKE ?" ;
         String[] whereNameParams = new String[] { ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,query};
         Cursor nameCur = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams, ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
+
+        while (nameCur.moveToNext()) {
+            id_name = nameCur.getString(nameCur.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.CONTACT_ID));}
+        nameCur.close();
+        cont.close();
+        nameCur.close();
+        */
+
+        //Find the ID
+        query = "%"+query+"%"; //Super important for the SQL LIKE command (LIKE %ed% returns true to EDuardo, pEDro, etc. (also LIKE is not case sensitive!)
+        String id_name=null;
+        Uri resultUri = ContactsContract.Contacts.CONTENT_URI;
+        Cursor cont = context.getContentResolver().query(resultUri, null, null, null, null);
+        String whereName = ContactsContract.Data.MIMETYPE + " = ? AND " + ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME + " LIKE ?" ;
+        String[] whereNameParams = new String[] { ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,query};
+        Cursor nameCur = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams, ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
+
         while (nameCur.moveToNext()) {
             id_name = nameCur.getString(nameCur.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.CONTACT_ID));}
         nameCur.close();
@@ -250,7 +276,7 @@ public class SMSRequestManager {
         cont.close();
         nameCur4.close();
         //showing result
-        sendSMS(msg_from,"Name= "+ name+"\nPhone= "+phone+"\nEmail= "+email);
+        sendSMS(msg_from, "Name= " + name + "\nPhone= " + phone + "\nEmail= " + email);
 
     }
 
