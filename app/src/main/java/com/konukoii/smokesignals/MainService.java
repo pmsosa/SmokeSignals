@@ -29,8 +29,7 @@ public class MainService extends Service{
             String action = intent.getAction();
             SMSRequestManager smsRequestManager = new SMSRequestManager();
             if(action.equals("android.provider.Telephony.SMS_RECEIVED")){
-                //Toast.makeText(context, "Pana te llego un mensaje!", Toast.LENGTH_LONG).show();
-                Log.d(TAG, "New SMS Arrived");
+                Log.d(TAG,"Firing up the SMSRequestManager!");
                 smsRequestManager.go(context, intent);
             }
         }

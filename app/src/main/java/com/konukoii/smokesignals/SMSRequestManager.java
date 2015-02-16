@@ -4,6 +4,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.location.LocationListener;
+import android.media.AudioAttributes;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.CallLog;
@@ -26,6 +28,9 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import java.util.Calendar;
+import android.media.AudioManager;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
 
 /**
  * Created by TransAtlantic on 2/14/2015.
@@ -58,6 +63,7 @@ public class SMSRequestManager {
     Context context;    //The context that called this
     Intent intent;      //The intent that called this
     String msg_from;    //Who is the app talking to
+    MediaPlayer ringerPlayer; //The MediaPlayer for the Ringer
 
     //Void Go
         //Main thing from where everything stems from
@@ -65,8 +71,8 @@ public class SMSRequestManager {
         this.context = context;
         this.intent = intent;
 
-        //Toast.makeText(context, "Pana te llego un mensaje!", Toast.LENGTH_LONG).show();
         Log.d(TAG, "New SMS Arrived");
+
         Bundle bundle = intent.getExtras();
         SmsMessage[] msgs = null;
         msg_from="";
@@ -81,14 +87,12 @@ public class SMSRequestManager {
                     msg_body = msgs[i].getMessageBody();
                 }
 
-                //Toast.makeText(context, msg_from, Toast.LENGTH_LONG).show();
-                //Toast.makeText(context, msg_body, Toast.LENGTH_LONG).show();
+
 
                 parseSMS(msg_body);
 
 
-                //Toast.makeText(context, "text"+i, Toast.LENGTH_LONG).show();
-                //Toast.makeText(context, "sh",Toast.LENGTH_LONG).show();
+
 
             } catch (Exception e) {
                 Log.d(TAG, e.getMessage());
@@ -105,6 +109,7 @@ public class SMSRequestManager {
         }
         else if (msg_body.equals("//Ring")){
             Toast.makeText(context, "Ring?", Toast.LENGTH_LONG).show();
+            QueryRing();
             return RING;
         }
         else if (msg_body.equals("//Battery")){
@@ -144,67 +149,14 @@ public class SMSRequestManager {
     }
 
     //Query Functions//////////////////////////////////////////////////////////////////////////////
-    private void QueryHelp(){
-        sendSMS(msg_from, HELP_TXT);
-    }
+    private void QueryHelp(){sendSMS(msg_from, HELP_TXT);}
 
-    private void QueryBattery(){
-        context.registerReceiver(this.BatteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-    }
+    private void QueryBattery(){context.registerReceiver(this.BatteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));}
 
     private void QueryLocation(){
         GPSLocation gpsloc = new GPSLocation();
         gpsloc.go();
     }
-
-    ///////GPS LOCATION LISTENER
-    public class GPSLocation implements LocationListener{
-        LocationManager mLocationManager;
-
-        public void go(){
-            mLocationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
-            Location location = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-
-            //Get Last Known location (2 minutes old max) [Lowers battery consumption]
-            if(location != null && location.getTime() > Calendar.getInstance().getTimeInMillis() - 2 * 60 * 1000) {
-                Log.d(TAG, location.getLatitude() + " and " + location.getLongitude());
-                String output = "Location:\n"+"Lat: "+location.getLatitude() + " Long: "+
-                                location.getLongitude()+"\nGmaps: "+" http://google.com/maps/?q="+location.getLatitude()+","+location.getLongitude();
-
-                sendSMS(msg_from,output);
-                mLocationManager.removeUpdates(this); //Super Important to RemoveUpdates (only want to query once)
-            }
-            else {
-                if (mLocationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)==true) {
-                    mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
-                }else{
-                    sendSMS(msg_from,"GPS is Turned Off! Can't Report Location :'(");
-                }
-            }
-        }
-
-        @Override
-        public void onLocationChanged(Location location){
-            if (location !=null){
-                Log.d(TAG, location.getLatitude() + " and " + location.getLongitude());
-                String output = "Location:\n"+"Lat: "+location.getLatitude() + " Long: "+
-                        location.getLongitude()+"\nGmaps: "+" http://google.com/maps/?q="+location.getLatitude()+","+location.getLongitude();
-
-                sendSMS(msg_from,output);
-                mLocationManager.removeUpdates(this); //Super Important to RemoveUpdates (only want to query once)
-            }
-        }
-        // Required functions
-        @Override
-        public void onProviderDisabled(String arg0) {;}
-        @Override
-        public void onProviderEnabled(String arg0) {;}
-        @Override
-        public void onStatusChanged(String arg0, int arg1, Bundle arg2) {;}
-    }
-
-
-    //////
 
     private void QueryMissedCalls(){
 
@@ -248,9 +200,6 @@ public class SMSRequestManager {
 
     }
 
-    //COPIED THIS FROM THE INTERWEBS. NO IDEA HOW THIS IS WORKING! SO CONFUSED ABOUT THIS
-    //SAUCE: http://stackoverflow.com/questions/9625308/android-find-a-contact-by-display-name
-    //TO DO: Quita los % de query cuando respondas que no hay matches
     private void QueryContact(String query){
 
         /*
@@ -345,9 +294,56 @@ public class SMSRequestManager {
 
     }
 
-//////Broadcast Receivers Inner Classes////////////////////////////////////////////////////////////
-    ///Gotta do it this way since BroadCast Receivers take a while to anwser back these queries///
-    ///Gotta be inner classes so they can unregister themselves///////////////////////////////////
+    private void QueryRing(){
+
+        //Si te vas por ringtone la broma no hace looping
+        //Si te vas por MediaPlayer la broma insiste en crashea
+        //Cuando decifres esto, montas un broadcast reciever para ACTION_USER_PRESENT para apagar el sonido
+        //mosca que dejaste un MediaPlayer variable declarado por all'a arriba :)
+        //chamo si me provoca una arepa y un papelon con limon ahorita
+
+        //1. Get Alarm Sound
+        Uri alert = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+        if(alert == null){
+            // alert is null, using backup
+            alert = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
+            // I can't see this ever being null (as always have a default notification)
+            // but just incase
+            if(alert == null) {
+                // alert backup is null, using 2nd backup
+                alert = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+            }
+        }
+        //2. Raise Volume
+        final AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        int maxVolume = audioManager.getStreamMaxVolume(audioManager.STREAM_ALARM);
+        audioManager.setStreamVolume(AudioManager.STREAM_ALARM,maxVolume,0);
+
+        //3. Play Alarm
+        final Ringtone r = RingtoneManager.getRingtone(context, alert);
+        r.play();
+
+        /*
+        try {
+            ringerPlayer = new MediaPlayer();
+            ringerPlayer = MediaPlayer.create(context, alert);
+            ringerPlayer.setAudioStreamType(AudioManager.STREAM_ALARM);
+            ringerPlayer.setLooping(true);
+            ringerPlayer.prepare();
+            ringerPlayer.start();
+        }catch (Exception e){ Log.d(TAG,e.getMessage());}
+        */
+
+
+    }
+//////Broadcast Receivers and Listeners Inner Classes///////////////////////////////////////////////
+    /*Broadcasters/Listeners take time to awnser. (you can think of them as separate processes.
+    //You call them by registering them to the service and when you are done you unregister them.
+    //However the service doesn't know when these guys are done doing their thing, so they
+    //gotta be inner classes to be able to unregister themselves
+    */
+
+    //Battery Broadcast Reciever
     private BroadcastReceiver BatteryReceiver = new BroadcastReceiver(){
         @Override
         public void onReceive(Context arg0, Intent intent) {
@@ -357,15 +353,58 @@ public class SMSRequestManager {
             context.unregisterReceiver(this);
         }
     };
-///////////////////////////-------------------
 
+    //GPS Location Listener
+    public class GPSLocation implements LocationListener{
 
-    //Blacklist or Whitelist Phones
+        /*
+            God Bless whoever asked this question: http://stackoverflow.com/questions/10524381/gps-android-get-positioning-only-once
+         */
 
-    //Parse String
-        //Is it really a request for us or just a random message
+        LocationManager mLocationManager;
 
+        public void go(){
+            mLocationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
+            Location location = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
 
-    //Find Location
+            //Get Last Known location (2 minutes old max) [Lowers battery consumption]
+            if(location != null && location.getTime() > Calendar.getInstance().getTimeInMillis() - 2 * 60 * 1000) {
+                Log.d(TAG, location.getLatitude() + " and " + location.getLongitude());
+                String output = "Location:\n"+"Lat: "+location.getLatitude() + " Long: "+
+                        location.getLongitude()+"\nGmaps: "+" http://google.com/maps/?q="+location.getLatitude()+","+location.getLongitude();
+
+                sendSMS(msg_from,output);
+                mLocationManager.removeUpdates(this); //Super Important to RemoveUpdates (only want to query once)
+            }
+            else {
+                if (mLocationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)==true) {
+                    mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
+                }else{
+                    sendSMS(msg_from,"GPS is Turned Off! Can't Report Location :'(");
+                }
+            }
+        }
+
+        @Override
+        public void onLocationChanged(Location location){
+            if (location !=null){
+                Log.d(TAG, location.getLatitude() + " and " + location.getLongitude());
+                String output = "Location:\n"+"Lat: "+location.getLatitude() + " Long: "+
+                        location.getLongitude()+"\nGmaps: "+" http://google.com/maps/?q="+location.getLatitude()+","+location.getLongitude();
+
+                sendSMS(msg_from,output);
+                mLocationManager.removeUpdates(this); //Super Important to RemoveUpdates (only want to query once)
+            }
+        }
+        // Required functions
+        @Override
+        public void onProviderDisabled(String arg0) {;}
+        @Override
+        public void onProviderEnabled(String arg0) {;}
+        @Override
+        public void onStatusChanged(String arg0, int arg1, Bundle arg2) {;}
+    }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 }
