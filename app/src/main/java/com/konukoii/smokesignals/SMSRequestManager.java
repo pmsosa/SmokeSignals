@@ -193,35 +193,24 @@ public class SMSRequestManager {
 
     //COPIED THIS FROM THE INTERWEBS. NO IDEA HOW THIS IS WORKING! SO CONFUSED ABOUT THIS
     //SAUCE: http://stackoverflow.com/questions/9625308/android-find-a-contact-by-display-name
-    //TO DO: (In order of easiness)
-    // --> DONT SEND EMAIL IF EMAIL IS NULL
-    // --> SEND MESSAGE BACK IF CONTACT NOT FOUND
-    // --> FIND MULTIPLE CONTACTS
-    // --> FIND CONTACTS WITH ONLY PARTIAL INFO
+    //TO DO: Quita los % de query cuando respondas que no hay matches
     private void QueryContact(String query){
 
+        /*
+         Explanation for this module:
+
+            Reference Links: http://stackoverflow.com/questions/9625308/android-find-a-contact-by-display-name
+
+         */
+
         //DO NOT DELETE THIS. Believe me, I have seen what happens when you indiscriminatly query for 'a' and suddenly your phone is dumping all your contacts!
-        if (query.length()<=3){
-            sendSMS(msg_from,"Query is too short. Please provide a contact query at least of at 4 characters");
+        if (query.length()<=2){
+            sendSMS(msg_from,"Query is too short. Please provide a contact query at least of at 3 characters");
             return;
         }
-         /*
-        query = "%"+query+"%"; //Super important for the SQL LIKE command (LIKE %ed% returns true to EDuardo, pEDro, etc. (also LIKE is not case sensitive!)
-        String id_name=null;
-        Uri resultUri = ContactsContract.Contacts.CONTENT_URI;
-        Cursor cont = context.getContentResolver().query(resultUri, null, null, null, null);
-        String whereName = ContactsContract.Data.MIMETYPE + " = ? AND " + ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME + " LIKE ?" ;
-        String[] whereNameParams = new String[] { ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,query};
-        Cursor nameCur = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams, ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
-
-        while (nameCur.moveToNext()) {
-            id_name = nameCur.getString(nameCur.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.CONTACT_ID));}
-        nameCur.close();
-        cont.close();
-        nameCur.close();
-        */
 
         //First get the List of All possible Contacts with their IDs
+        String _query = query;
         query = "%"+query+"%"; //Super important for the SQL LIKE command (LIKE %ed% returns true to EDuardo, pEDro, etc. (also LIKE is not case sensitive!)
         String id_name=null;
         Uri resultUri = ContactsContract.Contacts.CONTENT_URI;
@@ -233,7 +222,15 @@ public class SMSRequestManager {
 
         String output = "Possible Matches:\n";
 
-        //Loop throught the IDs
+        //We are going to store phones here, so we can check that we don't print duplicate info
+        //This is necessary because Android is a mess when it comes to storing contacts
+        //So don't be surprised if you have tooooons of weird duplicates
+        ArrayList<String> contacts = new ArrayList<String>();
+
+        //No Contact Found
+        if (nameCur.getCount()<=0){ sendSMS(msg_from,"No contact found matching "+_query);}
+
+        //Loop through the IDs
         while (nameCur.moveToNext()) {
 
             String name="";
@@ -264,9 +261,16 @@ public class SMSRequestManager {
             }
             nameCur3.close();
 
+            //CHECK FOR DUPLICATES
+            boolean flag=false;
+            for (int i=0;i<contacts.size();i++){
+                if (contacts.get(i).equals(phone)){flag=true;}
+            }
+            if (flag==true){continue;};
 
+            contacts.add(phone);
 
-
+            //PRINTOUT
             if (phone != "") {
                 output += "\nName: " + name;
                 output += "\nPhone: " + phone;
@@ -277,12 +281,16 @@ public class SMSRequestManager {
             }
         }
 
+        //Since we are explicitly not allowing searching for contacts that only have emails associated with them
+        if (output.equals("Possible Matches:\n")){ sendSMS(msg_from,"No contact found matching "+_query);return;}
+
         sendSMS(msg_from, output);
 
     }
 
     //Broadcast Receivers Inner Classes////////////////////////////////////////////////////////////
     ///Gotta do it this way since BroadCast Receivers take a while to anwser back these queries///
+    ///Gotta be inner classes so they can unregister themselves///////////////////////////////////
     private BroadcastReceiver mBatInfoReceiver = new BroadcastReceiver(){
         @Override
         public void onReceive(Context arg0, Intent intent) {
