@@ -3,8 +3,10 @@ package com.konukoii.smokesignals;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.provider.CallLog;
+import android.provider.ContactsContract;
 import android.telephony.gsm.SmsMessage;
 import android.util.Log;
 import android.widget.Toast;
@@ -14,6 +16,11 @@ import java.util.Date;
 import android.content.IntentFilter;
 import android.provider.CallLog;
 import android.database.Cursor;
+import android.content.ContentResolver;
+import android.provider.ContactsContract.Data;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.PhoneLookup;
+import android.content.ContentResolver;
 
 /**
  * Created by TransAtlantic on 2/14/2015.
@@ -36,11 +43,11 @@ public class SMSRequestManager {
     private final static int HELP = 6;
 
     private final static String HELP_TXT = "TEXT ME:\n'//Location' <- To query GPS coordinates\n" +
-                                                    "'//Contacts [name]' <- For contact search\n" +
+                                                    "'//Contact [name]' <- For contact search\n" +
                                                     "'//Calls' <- To query missed calls\n" +
                                                     "'//Battery' <-To query battery life\n"+
                                                     "'//Ring' <-For phone to start ringing (for 2 Minutes)\n"+
-                                                    "'//HELP' <-To display this help menu again\n";
+                                                    "'//Help' <-To display this help menu again\n";
 
 
     Context context;    //The context that called this
@@ -97,7 +104,9 @@ public class SMSRequestManager {
         else if (msg_body.equals("//Ring")){
             return RING;
         }
-        else if (msg_body.equals("//Contact")){
+        else if (msg_body.substring(0,9).equals("//Contact")){
+            QueryContact(msg_body.substring(10));
+            //sendSMS(msg_from,msg_body.substring(10));
             return CONTACTSEARCH;
         }
         else if (msg_body.equals("//Battery")){
@@ -128,15 +137,17 @@ public class SMSRequestManager {
     private void QueryHelp(){
         sendSMS(msg_from, HELP_TXT);
     }
+
     private void QueryBattery(){
         context.registerReceiver(this.mBatInfoReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
     }
+
     private void QueryMissedCalls(){
 
         //Get all the Call Log
         String[] projection = { CallLog.Calls.CACHED_NAME, CallLog.Calls.CACHED_NUMBER_LABEL, CallLog.Calls.TYPE };
 
-        //Query to find which calls in the Call Log are MISSED and NEW (Haven't been akwnoledged by user)
+        //Query to find which calls in the Call Log are MISSED and NEW (Haven't been awknoledged by user)
         String where = CallLog.Calls.TYPE+"="+CallLog.Calls.MISSED_TYPE+" AND NEW = 1";
         Cursor c = context.getContentResolver().query(CallLog.Calls.CONTENT_URI,null,where, null, null);
 
@@ -155,7 +166,7 @@ public class SMSRequestManager {
         int name = c.getColumnIndex(CallLog.Calls.CACHED_NAME);
         int date = c.getColumnIndex(CallLog.Calls.DATE);
 
-        do{
+        do{ //Because you know you have at least one
 
             String phNumber = c.getString(number);
             String callDate = c.getString(date);
@@ -173,6 +184,75 @@ public class SMSRequestManager {
 
     }
 
+    //COPIED THIS FROM THE INTERWEBS. NO IDEA HOW THIS IS WORKING! SO CONFUSED ABOUT THIS
+    //SAUCE: http://stackoverflow.com/questions/9625308/android-find-a-contact-by-display-name
+    //TO DO: (In order of easiness)
+    // --> DONT SEND EMAIL IF EMAIL IS NULL
+    // --> SEND MESSAGE BACK IF CONTACT NOT FOUND
+    // --> FIND MULTIPLE CONTACTS
+    // --> FIND CONTACTS WITH ONLY PARTIAL INFO
+    private void QueryContact(String query){
+        //Find the ID
+        String id_name=null;
+        Uri resultUri = ContactsContract.Contacts.CONTENT_URI;
+        Cursor cont = context.getContentResolver().query(resultUri, null, null, null, null);
+        String whereName = ContactsContract.Data.MIMETYPE + " = ? AND " + ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME + " = ?" ;
+        String[] whereNameParams = new String[] { ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,query};
+        Cursor nameCur = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams, ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
+        while (nameCur.moveToNext()) {
+            id_name = nameCur.getString(nameCur.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.CONTACT_ID));}
+        nameCur.close();
+        cont.close();
+        nameCur.close();
+
+        String id = id_name;
+
+
+        //Find the REST;
+        String name=null;
+        String phone=null;
+        String email=null;
+        resultUri = ContactsContract.Contacts.CONTENT_URI;
+        cont = context.getContentResolver().query(resultUri, null, null, null, null);
+        whereName = ContactsContract.Data.MIMETYPE + " = ? AND " + ContactsContract.CommonDataKinds.StructuredName.CONTACT_ID+ " = ?" ;
+
+        String[] whereNameParams1 = new String[] { ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,id};
+        Cursor nameCur1 = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams1, ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
+        while (nameCur1.moveToNext()) {
+            name = nameCur1.getString(nameCur1.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME));}
+        nameCur1.close();
+        cont.close();
+        nameCur1.close();
+
+
+        String[] whereNameParams2 = new String[] { ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE,id};
+        Cursor nameCur2 = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams2, ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
+        while (nameCur2.moveToNext()) {
+            phone = nameCur2.getString(nameCur2.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));}
+        nameCur2.close();
+        cont.close();
+        nameCur2.close();
+
+
+        String[] whereNameParams3 = new String[] { ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE,id};
+        Cursor nameCur3 = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams3, ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
+        while (nameCur3.moveToNext()) {
+            email = nameCur3.getString(nameCur3.getColumnIndex(ContactsContract.CommonDataKinds.Email.DATA));}
+        nameCur3.close();
+        cont.close();
+        nameCur3.close();
+
+        String[] whereNameParams4 = new String[] { ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE,id};
+        Cursor nameCur4 = context.getContentResolver().query(ContactsContract.Data.CONTENT_URI, null, whereName, whereNameParams4, ContactsContract.CommonDataKinds.StructuredPostal.DATA);
+        while (nameCur4.moveToNext()) {
+            phone = nameCur4.getString(nameCur4.getColumnIndex(ContactsContract.CommonDataKinds.StructuredPostal.DATA));}
+        nameCur4.close();
+        cont.close();
+        nameCur4.close();
+        //showing result
+        sendSMS(msg_from,"Name= "+ name+"\nPhone= "+phone+"\nEmail= "+email);
+
+    }
 
     //Broadcast Receivers Inner Classes////////////////////////////////////////////////////////////
     ///Gotta do it this way since BroadCast Receivers take a while to anwser back these queries///
@@ -193,7 +273,6 @@ public class SMSRequestManager {
     //Parse String
         //Is it really a request for us or just a random message
 
-    //Respond_to_sms
 
     //Find Location
 
